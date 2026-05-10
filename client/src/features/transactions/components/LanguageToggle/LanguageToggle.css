@@ -1,0 +1,18 @@
+.language-toggle {
+    display: flex;
+    gap: 12px;
+}
+
+.language-toggle button {
+    min-width: 76px;
+    height: 36px;
+    border: 1px solid var(--color-text);
+    border-radius: 10px;
+    background: transparent;
+    cursor: pointer;
+}
+
+.active-language {
+    background: var(--color-text) !important;
+    color: white;
+}
