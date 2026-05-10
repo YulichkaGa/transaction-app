@@ -1,15 +1,16 @@
 ﻿using Shva.Application.DTOs;
+using Shva.Application.Interfaces;
 using Shva.Domain.Entities;
 
 namespace Shva.Application.Services;
 
 public class TransactionService
 {
-    private readonly AppDbContext _context;
+    private readonly ITransactionRepository _transactionRepository;
 
-    public TransactionService(AppDbContext context)
+    public TransactionService(ITransactionRepository transactionRepository)
     {
-        _context = context;
+        _transactionRepository = transactionRepository;
     }
 
     public async Task<TransactionResponse> SimulateAsync(CreateTransactionRequest request)
@@ -22,20 +23,18 @@ public class TransactionService
         );
 
         var isApproved = localTime.TimeOfDay >= TimeSpan.FromHours(8)
-                      && localTime.TimeOfDay <= TimeSpan.FromHours(18);
-
-        var status = isApproved ? "Approved" : "Rejected";
+                         && localTime.TimeOfDay <= TimeSpan.FromHours(18);
 
         var transaction = new Transaction
         {
             Region = request.Region,
             SubmittedUtcTime = request.SubmittedUtcTime,
             LocalTime = localTime,
-            Status = status
+            Status = isApproved ? "Approved" : "Rejected",
+            CreatedAt = DateTime.UtcNow
         };
 
-        _context.Transactions.Add(transaction);
-        await _context.SaveChangesAsync();
+        await _transactionRepository.AddAsync(transaction);
 
         return new TransactionResponse
         {
@@ -47,22 +46,21 @@ public class TransactionService
         };
     }
 
-    public List<TransactionResponse> GetApproved()
+    public async Task<List<TransactionResponse>> GetApprovedAsync()
     {
-        return _context.Transactions
-            .Where(t => t.Status == "Approved")
-            .Select(t => new TransactionResponse
-            {
-                Id = t.Id,
-                Region = t.Region,
-                SubmittedUtcTime = t.SubmittedUtcTime,
-                LocalTime = t.LocalTime,
-                Status = t.Status
-            })
-            .ToList();
+        var transactions = await _transactionRepository.GetApprovedAsync();
+
+        return transactions.Select(transaction => new TransactionResponse
+        {
+            Id = transaction.Id,
+            Region = transaction.Region,
+            SubmittedUtcTime = transaction.SubmittedUtcTime,
+            LocalTime = transaction.LocalTime,
+            Status = transaction.Status
+        }).ToList();
     }
 
-    private TimeZoneInfo GetTimeZone(string region)
+    private static TimeZoneInfo GetTimeZone(string region)
     {
         return region switch
         {
@@ -70,7 +68,7 @@ public class TransactionService
             "France" => TimeZoneInfo.FindSystemTimeZoneById("Romance Standard Time"),
             "USA" => TimeZoneInfo.FindSystemTimeZoneById("Eastern Standard Time"),
             "Japan" => TimeZoneInfo.FindSystemTimeZoneById("Tokyo Standard Time"),
-            _ => throw new Exception("Invalid region")
+            _ => throw new ArgumentException("Invalid region")
         };
     }
 }
